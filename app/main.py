@@ -39,7 +39,8 @@ def _database_url() -> str:
             f"@{os.environ['DB_HOST']}:{os.getenv('DB_PORT', '5432')}/{os.environ['DB_NAME']}?sslmode=require")
 
 
-JWT_SECRET = _secret(os.environ["JWT_SECRET_ARN"]) if os.getenv("JWT_SECRET_ARN") else os.getenv("JWT_SECRET", "dev-only-secret")
+# Secret Key statis sesuai permintaan
+JWT_SECRET = "PRATHAMAA29"
 engine = create_engine(_database_url(), pool_size=10, max_overflow=20, pool_pre_ping=True, pool_recycle=1800)
 
 s3 = boto3.client(
@@ -53,7 +54,13 @@ async def lifespan(_: FastAPI):
     schema_path = Path(__file__).parent / "schema.sql"
     if schema_path.exists():
         with engine.begin() as c:
-            c.exec_driver_sql(schema_path.read_text())
+            sql_script = schema_path.read_text()
+            statements = [s.strip() for s in sql_script.split(";") if s.strip()]
+            for stmt in statements:
+                try:
+                    c.exec_driver_sql(stmt)
+                except Exception as e:
+                    print("DDL execution notice:", e)
     yield
 
 
@@ -452,7 +459,7 @@ def verify_pw(pw: str, stored: str) -> bool:
 
 def current_user(authorization: str = Header(None)) -> dict:
     if not authorization:
-        raise HTTPException(401, "Token tidak ditemukan")
+        raise HTTPException(401, "Token tidak ditemukan di header")
     try:
         token = authorization
         for prefix in ["Bearer ", "bearer ", "BEARER "]:
@@ -461,8 +468,8 @@ def current_user(authorization: str = Header(None)) -> dict:
                 break
         token = token.strip()
         return jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-    except jwt.PyJWTError as e:
-        raise HTTPException(401, f"Token tidak valid / kedaluwarsa: {str(e)}")
+    except Exception as e:
+        raise HTTPException(401, f"JWT Decode Error: {type(e).__name__} - {str(e)}")
 
 
 def require(*roles: str):
