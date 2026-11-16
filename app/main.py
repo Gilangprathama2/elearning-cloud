@@ -1,10 +1,3 @@
-@app.get("/")
-def read_root():
-    return {
-        "status": "success",
-        "message": "Selamat datang di Backend E-Learning Universitas API",
-        "docs": "/docs"
-    }
 """E-Learning Universitas - backend API (FastAPI).
 
 Alur file besar (video/PDF): browser minta presigned URL -> upload LANGSUNG ke S3
