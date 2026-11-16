@@ -1,0 +1,14 @@
+project_name = "elearning"
+environment  = "dev"          # ganti "prod" untuk deletion protection + final snapshot
+region       = "ap-southeast-3"
+
+single_nat   = true           # prod: false
+db_multi_az  = true
+db_instance_class = "db.t3.medium"
+
+asg_min     = 2
+asg_desired = 2
+asg_max     = 10
+
+# acm_certificate_arn = "arn:aws:acm:ap-southeast-3:123456789012:certificate/xxxx"
+# cors_origins        = ["https://elearning.kampus.ac.id"]

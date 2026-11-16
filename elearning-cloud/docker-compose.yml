@@ -1,0 +1,32 @@
+# Pengembangan lokal: Postgres + MinIO (pengganti S3) + API
+services:
+  db:
+    image: postgres:16
+    environment: { POSTGRES_USER: elearning, POSTGRES_PASSWORD: elearning, POSTGRES_DB: elearning }
+    ports: ["5432:5432"]
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment: { MINIO_ROOT_USER: minioadmin, MINIO_ROOT_PASSWORD: minioadmin }
+    ports: ["9000:9000", "9001:9001"]
+  minio-init:
+    image: minio/mc
+    depends_on: [minio]
+    entrypoint: >
+      /bin/sh -c "sleep 3 &&
+      mc alias set local http://minio:9000 minioadmin minioadmin &&
+      mc mb -p local/elearning-materi local/elearning-tugas &&
+      mc anonymous set none local/elearning-materi local/elearning-tugas"
+  api:
+    build: ./app
+    depends_on: [db, minio]
+    ports: ["8080:8080"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://elearning:elearning@db:5432/elearning
+      JWT_SECRET: dev-only-secret
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      S3_ENDPOINT_URL: http://localhost:9000   # dipakai untuk presigned URL yang dibuka browser
+      BUCKET_MATERI: elearning-materi
+      BUCKET_TUGAS: elearning-tugas
