@@ -366,6 +366,11 @@ HTML_UI = """<!DOCTYPE html>
                 },
 
                 async createCourse() {
+                    if (!this.token) {
+                        alert('Token autentikasi tidak ditemukan. Silakan login ulang.');
+                        this.logout();
+                        return;
+                    }
                     try {
                         let res = await fetch(this.apiUrl + '/courses', {
                             method: 'POST',
@@ -375,12 +380,22 @@ HTML_UI = """<!DOCTYPE html>
                             },
                             body: JSON.stringify(this.newCourse)
                         });
-                        if (res.ok) {
-                            this.showAddCourseModal = false;
-                            this.newCourse = { code: '', name: '' };
-                            this.loadCourses();
+                        if (res.status === 401) {
+                            alert('Sesi telah kedaluwarsa atau tidak sah (401). Silakan login ulang.');
+                            this.logout();
+                            return;
                         }
-                    } catch (err) { alert('Gagal membuat mata kuliah'); }
+                        if (!res.ok) {
+                            let errData = await res.json().catch(() => ({}));
+                            throw new Error(errData.detail || 'Gagal membuat mata kuliah (Status: ' + res.status + ')');
+                        }
+                        this.showAddCourseModal = false;
+                        this.newCourse = { code: '', name: '' };
+                        this.loadCourses();
+                        alert('Mata kuliah berhasil dibuat!');
+                    } catch (err) { 
+                        alert('Error: ' + err.message); 
+                    }
                 },
 
                 async selectCourse(c) {
@@ -435,11 +450,19 @@ def verify_pw(pw: str, stored: str) -> bool:
     return hmac.compare_digest(hash_pw(pw, salt), stored)
 
 
-def current_user(authorization: str = Header(...)) -> dict:
+def current_user(authorization: str = Header(None)) -> dict:
+    if not authorization:
+        raise HTTPException(401, "Token tidak ditemukan")
     try:
-        return jwt.decode(authorization.removeprefix("Bearer "), JWT_SECRET, algorithms=["HS256"])
-    except jwt.PyJWTError:
-        raise HTTPException(401, "Token tidak valid / kedaluwarsa")
+        token = authorization
+        for prefix in ["Bearer ", "bearer ", "BEARER "]:
+            if token.startswith(prefix):
+                token = token[len(prefix):]
+                break
+        token = token.strip()
+        return jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+    except jwt.PyJWTError as e:
+        raise HTTPException(401, f"Token tidak valid / kedaluwarsa: {str(e)}")
 
 
 def require(*roles: str):
@@ -486,7 +509,10 @@ def login(d: LoginIn):
     if not u or not verify_pw(d.password, u.password_hash):
         raise HTTPException(401, "Email atau password salah")
     exp = datetime.now(timezone.utc) + timedelta(hours=8)
-    return {"access_token": jwt.encode({"sub": u.id, "role": u.role, "exp": exp}, JWT_SECRET, algorithm="HS256")}
+    encoded = jwt.encode({"sub": u.id, "role": u.role, "exp": exp}, JWT_SECRET, algorithm="HS256")
+    if isinstance(encoded, bytes):
+        encoded = encoded.decode("utf-8")
+    return {"access_token": encoded}
 
 
 # ---------- helper akses ----------
